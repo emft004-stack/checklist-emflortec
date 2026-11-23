@@ -1,12 +1,17 @@
-const VERSAO = "checklist-emflortec-v2";
+const VERSAO = "checklist-emflortec-v4";
 const ARQUIVOS = ["./", "./index.html", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png", "./icon-maskable-512.png", "./apple-touch-icon.png"];
-const CDN = "https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js";
+const CDN = [
+  "https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js",
+  "https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"
+];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(
     caches.open(VERSAO).then(async (c) => {
       await c.addAll(ARQUIVOS);
-      try { await c.add(new Request(CDN, { mode: "no-cors" })); } catch (_) {}
+      for (const url of CDN) {
+        try { await c.add(new Request(url, { mode: "no-cors" })); } catch (_) {}
+      }
     }).then(() => self.skipWaiting())
   );
 });

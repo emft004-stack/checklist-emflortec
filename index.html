@@ -50,6 +50,7 @@ h2{font-size:.95rem;margin:18px 0 8px;color:var(--ac);text-transform:uppercase;l
 .btn{display:inline-block;padding:10px 14px;border-radius:8px;border:1px solid var(--ac);background:transparent;color:var(--ac);font:inherit;font-weight:600;cursor:pointer}
 .btn.pri{background:var(--ac);color:#fff;-webkit-print-color-adjust:exact}
 .btn.share{background:#25D366;border-color:#25D366;color:#fff}
+.btn.drive{background:#1a73e8;border-color:#1a73e8;color:#fff}
 .btn.sec{background:var(--na);border-color:var(--na);color:#fff}
 .btn:disabled{opacity:.6;cursor:not-allowed}
 .thumbs{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
@@ -146,12 +147,14 @@ h2{font-size:.95rem;margin:18px 0 8px;color:var(--ac);text-transform:uppercase;l
 
 <div class="actions">
   <button type="button" class="btn share" id="btnEnviar">📄 Compartilhar PDF pelo WhatsApp</button>
+  <button type="button" class="btn drive" id="btnDrive">☁️ Enviar ZIP para o Google Drive</button>
   <button type="button" class="btn sec" id="btnNovo">🆕 Novo Checklist</button>
 </div>
-<p class="hint noprint" style="margin-top:8px">Toque em “Compartilhar PDF pelo WhatsApp”. Após a preparação do arquivo, toque novamente no mesmo botão e escolha o WhatsApp. O PDF apresenta os itens em tabela e inclui as fotos e a assinatura. Use “Novo Checklist” somente quando quiser limpar os dados e começar outro.</p>
+<p class="hint noprint" style="margin-top:8px">Toque em “Compartilhar PDF pelo WhatsApp”. Após a preparação do arquivo, toque novamente no mesmo botão e escolha o WhatsApp. O PDF apresenta os itens em tabela e inclui as fotos e a assinatura. “Enviar ZIP para o Google Drive” sobe um arquivo compactado com o PDF e as fotos originais para a pasta configurada. Use “Novo Checklist” somente quando quiser limpar os dados e começar outro.</p>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script>
 var SEC=[
  ["1. Documentos e itens de segurança",[
@@ -185,6 +188,8 @@ var SEC=[
 ];
 
 
+/* Cole aqui a URL /exec do Apps Script publicado em google-drive/Codigo.gs */
+var DRIVE={scriptUrl:"https://script.google.com/macros/s/AKfycbxChqx3_a6-aSXXYBiYgptGUqBVZ5TLmFWxKjI8H2XHJC6_hu7xbXYgy4RUCEYwIIxVVw/exec"};
 var $=function(i){return document.getElementById(i)};
 var fotos={};
 var fotosVeiculo={dianteira:null, traseira:null, lateral_esq:null, lateral_dir:null};
@@ -632,6 +637,70 @@ $("btnEnviar").onclick=function(){
   }).finally(function(){
     btn.disabled=false;
     if(!arquivoPDFPronto)btn.textContent=TXT_ENVIAR;
+  });
+};
+function dataURLParaBlob(dataUrl){
+  var partes=String(dataUrl).split(","),mime=(partes[0].match(/:(.*?);/)||[])[1]||"image/jpeg";
+  var bin=atob(partes[1]||""),arr=new Uint8Array(bin.length);
+  for(var i=0;i<bin.length;i++)arr[i]=bin.charCodeAt(i);
+  return new Blob([arr],{type:mime});
+}
+function montarZip(pdfBlob){
+  if(typeof JSZip==="undefined") return Promise.reject(new Error("A biblioteca de ZIP não carregou. Verifique a internet."));
+  var zip=new JSZip(),pasta=zip.folder("fotos");
+  zip.file(nomeArquivoPDF(),pdfBlob);
+  SLOTS_VEICULO.forEach(function(s){
+    if(fotosVeiculo[s.key]) pasta.file("veiculo-"+s.key+".jpg",dataURLParaBlob(fotosVeiculo[s.key]));
+  });
+  for(var i=1;i<=n;i++){
+    (fotos[i]||[]).forEach(function(url,idx){
+      pasta.file("item-"+("0"+i).slice(-2)+"-"+(idx+1)+".jpg",dataURLParaBlob(url));
+    });
+  }
+  return zip.generateAsync({type:"blob",compression:"DEFLATE"});
+}
+function blobParaBase64(blob){
+  return new Promise(function(resolve,reject){
+    var rd=new FileReader();
+    rd.onload=function(){resolve(String(rd.result).split(",")[1]||"");};
+    rd.onerror=function(){reject(rd.error||new Error("Não foi possível ler o ZIP."));};
+    rd.readAsDataURL(blob);
+  });
+}
+function enviarZipParaDrive(zipBlob,nome){
+  if(!DRIVE.scriptUrl) return Promise.reject(new Error("Falta a URL do Google Drive. Abra google-drive/Codigo.gs, publique o script e cole a URL terminada em /exec em DRIVE.scriptUrl, no início do index.html."));
+  return blobParaBase64(zipBlob).then(function(arquivo){
+    return fetch(DRIVE.scriptUrl,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify({nome:nome,arquivo:arquivo})});
+  }).then(function(resp){
+    return resp.text().then(function(texto){
+      var dados=null;
+      try{dados=JSON.parse(texto);}catch(e){}
+      if(!dados) throw new Error("O Google Drive não confirmou o envio. Confira se o script está publicado como aplicativo da web, executando como você, com acesso para qualquer pessoa.");
+      if(!resp.ok||!dados.ok) throw new Error(dados.erro||"O Google Drive recusou o arquivo.");
+      return dados;
+    });
+  });
+}
+$("btnDrive").onclick=function(){
+  if(!validar())return;
+  var btn=this,outro=$("btnEnviar");
+  btn.disabled=true;outro.disabled=true;$("msg").style.display="none";
+  var versao=versaoDadosChecklist,nome=nomeBase()+".zip";
+  btn.textContent="⏳ Gerando ZIP...";
+  gerarPDF().then(function(pdf){
+    if(versao!==versaoDadosChecklist) throw new Error("Os dados foram alterados durante a geração. Envie novamente.");
+    btn.textContent="⏳ Enviando ao Drive...";
+    return montarZip(pdf);
+  }).then(function(zip){
+    return enviarZipParaDrive(zip,nome);
+  }).then(function(dados){
+    mostrarMsg("ZIP enviado para a pasta do Google Drive"+(dados.url?". Abra o arquivo: "+dados.url:"")+".");
+  }).catch(function(err){
+    console.error(err);
+    mostrarMsg("Não foi possível enviar ao Google Drive: "+((err&&err.message)||"erro desconhecido"));
+  }).finally(function(){
+    btn.disabled=false;outro.disabled=false;
+    btn.textContent="☁️ Enviar ZIP para o Google Drive";
   });
 };
 $('btnNovo').onclick=function(){
