@@ -50,7 +50,6 @@ h2{font-size:.95rem;margin:18px 0 8px;color:var(--ac);text-transform:uppercase;l
 .item-fotos{margin-top:8px}
 .btn{display:inline-block;padding:10px 14px;border-radius:8px;border:1px solid var(--ac);background:transparent;color:var(--ac);font:inherit;font-weight:600;cursor:pointer}
 .btn.pri{background:var(--ac);color:#fff;-webkit-print-color-adjust:exact}
-.btn.share{background:#25D366;border-color:#25D366;color:#fff}
 .btn.drive{background:#1a73e8;border-color:#1a73e8;color:#fff}
 .btn.sec{background:var(--na);border-color:var(--na);color:#fff}
 .btn:disabled{opacity:.6;cursor:not-allowed}
@@ -86,7 +85,7 @@ h2{font-size:.95rem;margin:18px 0 8px;color:var(--ac);text-transform:uppercase;l
  html,body{background:#fff!important;color:#000!important;margin:0!important;padding:0!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
  body{font-size:10pt}
  .wrap{width:100%!important;max-width:100%!important;margin:0!important;padding:0!important;background:#fff!important;color:#000!important}
- header,.btn,.actions,#msg,.add,.thumb button,.hint.noprint,.badge-obrig,.aviso-obrig,.contador-fotos{display:none!important}
+ header,.btn,.actions,#msg,#filaStatus,.add,.thumb button,.hint.noprint,.badge-obrig,.aviso-obrig,.contador-fotos{display:none!important}
  .printtitle{display:block!important;color:#000!important;background:#fff!important}
  .card,.item,.foto-slot,.sigbox{background:#fff!important;color:#000!important;box-shadow:none!important}
  .card{break-inside:auto;page-break-inside:auto}
@@ -99,11 +98,12 @@ h2{font-size:.95rem;margin:18px 0 8px;color:var(--ac);text-transform:uppercase;l
  .foto-slot{border-color:#999}
 }
 .printtitle{display:none;text-align:center;margin-bottom:8px}
+#filaStatus{position:fixed;left:0;right:0;bottom:0;z-index:60;display:none;padding:10px 14px calc(10px + env(safe-area-inset-bottom,0px));font:600 14px Arial,sans-serif;text-align:center;color:#fff;background:#1f6b4a}#filaStatus.pend{background:#a05a00}#filaStatus.erro{background:#b3261e}#filaStatus.ok{background:#1f6b4a}body.com-fila{padding-bottom:64px}
 </style>
 </head>
 <body>
 <div class="wrap">
-<header><small>EMFLORTEC ENGENHARIA</small><h1>Checklist Veicular <span class="versao" id="versaoApp">v1.2</span></h1></header>
+<header><small>EMFLORTEC ENGENHARIA</small><h1>Checklist Veicular <span class="versao" id="versaoApp">v1.3</span></h1></header>
 <div class="printtitle"><strong>EMFLORTEC ENGENHARIA</strong><br>CHECKLIST VEICULAR</div>
 
 <div class="card">
@@ -145,17 +145,16 @@ h2{font-size:.95rem;margin:18px 0 8px;color:var(--ac);text-transform:uppercase;l
 <p class="legal">IMPORTANTE: este checklist é uma conferência inicial do veículo. Requisitos adicionais do local de trabalho também devem ser atendidos.</p>
 
 <div id="msg" role="alert"></div>
+<div id="filaStatus" class="noprint" role="status" aria-live="polite"></div>
 
 <div class="actions">
-  <button type="button" class="btn share" id="btnEnviar">📄 Compartilhar PDF pelo WhatsApp</button>
-  <button type="button" class="btn drive" id="btnDrive">☁️ Enviar ZIP para o Google Drive</button>
-  <button type="button" class="btn sec" id="btnNovo">🆕 Novo Checklist</button>
+  <button type="button" class="btn drive" id="btnDrive">Enviar checklist ao Google Drive</button>
+  <button type="button" class="btn sec" id="btnNovo">Novo Checklist</button>
 </div>
-<p class="hint noprint" style="margin-top:8px">Toque em “Compartilhar PDF pelo WhatsApp”. Após a preparação do arquivo, toque novamente no mesmo botão e escolha o WhatsApp. O PDF apresenta os itens em tabela e inclui as fotos e a assinatura. “Enviar ZIP para o Google Drive” sobe um arquivo compactado com o PDF e as fotos originais para a pasta configurada. Use “Novo Checklist” somente quando quiser limpar os dados e começar outro.</p>
+<p class="hint noprint" style="margin-top:8px">Um único envio guarda o PDF e as fotos na pasta do checklist e o CSV na pasta de dados. Se estiver sem internet, os arquivos ficam na fila deste aparelho: mantenha ou reabra o aplicativo quando a conexão voltar. Use “Novo Checklist” somente quando quiser limpar os dados e começar outro.</p>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script>
 var SEC=[
  ["1. Documentos e itens de segurança",[
@@ -560,152 +559,211 @@ function gerarPDF(){
 }
 
 /* ============ BOTÕES ============ */
-function placaLimpa(){return (($('tag').value||"").toUpperCase().replace(/[^A-Z0-9_-]/g,""))||"SEM PLACA";}
+function placaLimpa(){return (($('tag').value||"").toUpperCase().replace(/[^A-Z0-9_-]/g,""))||"SEM-PLACA";}
 function dataArquivo(){var v=($('dataass')&&$('dataass').value)||"";var m=v.match(/^(\d{4})-(\d{2})-(\d{2})$/);if(m)return m[3]+"-"+m[2]+"-"+m[1];var d=new Date();return ("0"+d.getDate()).slice(-2)+"-"+("0"+(d.getMonth()+1)).slice(-2)+"-"+d.getFullYear();}
 function nomeBase(){return "CHECKLIST - "+placaLimpa()+" - "+dataArquivo();}
 function nomeArquivoPDF(){return nomeBase()+".pdf";}
-var arquivoPDFPronto=null,versaoDadosChecklist=0;
-var TXT_ENVIAR="📄 Compartilhar PDF pelo WhatsApp";
-var TXT_COMPARTILHAR_PRONTO="📲 Toque para enviar PDF pelo WhatsApp";
+var versaoDadosChecklist=0,envioAtual=null;
 function registrarAlteracaoChecklist(){
-  if(arquivoPDFPronto){
-    $("msg").style.display="none";
-    $("btnEnviar").textContent=TXT_ENVIAR;
-  }
   versaoDadosChecklist++;
-  arquivoPDFPronto=null;
+  envioAtual=null;
 }
 function mostrarMsg(texto){
   var msg=$("msg");msg.textContent=texto;msg.style.display="block";
   msg.scrollIntoView({behavior:"smooth",block:"center"});
 }
-function baixarArquivo(arquivo){
-  var conteudo=arquivo.blob||arquivo,url=URL.createObjectURL(conteudo),a=document.createElement("a");
-  a.href=url;a.download=arquivo.name||nomeArquivoPDF();a.style.display="none";document.body.appendChild(a);a.click();
-  setTimeout(function(){a.remove();URL.revokeObjectURL(url);},15000);
-}
-function criarArquivo(blob,nome){
-  return typeof File==="undefined"?{blob:blob,name:nome,type:"application/pdf"}:new File([blob],nome,{type:"application/pdf"});
-}
-function podeCompartilhar(arquivos){
-  try{return !!(navigator.share&&(!navigator.canShare||navigator.canShare({files:arquivos})));}
-  catch(err){return false;}
-}
-function compartilharPDFPronto(){
-  if(!arquivoPDFPronto)return;
-  var arquivo=arquivoPDFPronto,versao=versaoDadosChecklist;
-  function baixarComOrientacao(motivo){
-    baixarArquivo(arquivo);
-    mostrarMsg("Não foi possível abrir o compartilhamento"+(motivo?" ("+motivo+")":"")+". O PDF foi baixado; no WhatsApp toque no clipe > Documento e escolha “"+arquivo.name+"”.");
-  }
-  if(!podeCompartilhar([arquivo])){
-    baixarComOrientacao("este aparelho não aceita esse arquivo");
-    return;
-  }
-  var compartilhamento;
-  try{
-    compartilhamento=navigator.share({files:[arquivo],title:nomeBase(),text:nomeBase()});
-  }catch(err){
-    if(err&&err.name==="AbortError")return;
-    console.error("Falha ao compartilhar o PDF.",err);
-    baixarComOrientacao((err&&err.name)||"erro");
-    return;
-  }
-  Promise.resolve(compartilhamento).catch(function(err){
-    if(err&&err.name==="AbortError")return;
-    console.error("Falha ao compartilhar o PDF.",err);
-    if(versao!==versaoDadosChecklist){
-      mostrarMsg("Os dados foram alterados durante o compartilhamento. Gere o PDF novamente antes de compartilhar.");
-      return;
-    }
-    baixarComOrientacao((err&&err.name)||"erro");
-  });
-}
-$("btnEnviar").onclick=function(){
-  if(arquivoPDFPronto){compartilharPDFPronto();return;}
-  if(!validar())return;
-  var btn=this;btn.disabled=true;$("msg").style.display="none";
-  var versao=versaoDadosChecklist;
-  btn.textContent="⏳ Gerando PDF...";
-  gerarPDF().then(function(blob){
-    if(versao!==versaoDadosChecklist)throw new Error("Os dados foram alterados durante a geração. Prepare o PDF novamente.");
-    arquivoPDFPronto=criarArquivo(blob,nomeArquivoPDF());
-    btn.textContent=TXT_COMPARTILHAR_PRONTO;
-    mostrarMsg("PDF pronto. Toque novamente no botão e escolha o WhatsApp para compartilhar.");
-  }).catch(function(err){
-    console.error(err);
-    mostrarMsg("Não foi possível preparar o PDF: "+((err&&err.message)||"erro desconhecido"));
-  }).finally(function(){
-    btn.disabled=false;
-    if(!arquivoPDFPronto)btn.textContent=TXT_ENVIAR;
-  });
-};
-function dataURLParaBlob(dataUrl){
-  var partes=String(dataUrl).split(","),mime=(partes[0].match(/:(.*?);/)||[])[1]||"image/jpeg";
-  var bin=atob(partes[1]||""),arr=new Uint8Array(bin.length);
-  for(var i=0;i<bin.length;i++)arr[i]=bin.charCodeAt(i);
-  return new Blob([arr],{type:mime});
-}
-function montarZip(pdfBlob){
-  if(typeof JSZip==="undefined") return Promise.reject(new Error("A biblioteca de ZIP não carregou. Verifique a internet."));
-  var zip=new JSZip(),pasta=zip.folder("fotos");
-  zip.file(nomeArquivoPDF(),pdfBlob);
-  SLOTS_VEICULO.forEach(function(s){
-    if(fotosVeiculo[s.key]) pasta.file("veiculo-"+s.key+".jpg",dataURLParaBlob(fotosVeiculo[s.key]));
-  });
-  for(var i=1;i<=n;i++){
-    (fotos[i]||[]).forEach(function(url,idx){
-      pasta.file("item-"+("0"+i).slice(-2)+"-"+(idx+1)+".jpg",dataURLParaBlob(url));
-    });
-  }
-  return zip.generateAsync({type:"blob",compression:"DEFLATE"});
-}
 function blobParaBase64(blob){
   return new Promise(function(resolve,reject){
-    var rd=new FileReader();
-    rd.onload=function(){resolve(String(rd.result).split(",")[1]||"");};
-    rd.onerror=function(){reject(rd.error||new Error("Não foi possível ler o ZIP."));};
-    rd.readAsDataURL(blob);
+    var leitor=new FileReader();
+    leitor.onload=function(){resolve(String(leitor.result).split(",")[1]||"");};
+    leitor.onerror=function(){reject(leitor.error||new Error("Não foi possível ler o arquivo."));};
+    leitor.readAsDataURL(blob);
   });
 }
-function enviarZipParaDrive(zipBlob,nome){
-  if(!DRIVE.scriptUrl) return Promise.reject(new Error("Falta a URL do Google Drive. Abra google-drive/Codigo.gs, publique o script e cole a URL terminada em /exec em DRIVE.scriptUrl, no início do index.html."));
-  return blobParaBase64(zipBlob).then(function(arquivo){
-    return fetch(DRIVE.scriptUrl,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify({nome:nome,arquivo:arquivo})});
-  }).then(function(resp){
+function gerarCSV(id,pasta){
+  var colunas=["ID checklist","Data","Data da assinatura","Placa / TAG","Quilometragem","Motorista","CPF","Assinado","Observações gerais","Tem fotos","Quantidade de fotos","Fotos do veículo","Pasta do checklist","Seção","Número do item","Item","Resultado","Observação do item","Tem foto do item","Quantidade de fotos do item"];
+  var fotosVeiculoLista=SLOTS_VEICULO.filter(function(slot){return !!fotosVeiculo[slot.key];}).map(function(slot){return slot.label;});
+  var totalFotos=fotosVeiculoLista.length;
+  for(var i=1;i<=n;i++)totalFotos+=(fotos[i]||[]).length;
+  var data=$('dataret').value,assinatura=$('dataass').value;
+  if(data)data=data.split('-').reverse().join('/');
+  if(assinatura)assinatura=assinatura.split('-').reverse().join('/');
+  var comuns=[id,data,assinatura,$('tag').value.trim(),$('km').value,$('motorista').value.trim(),$('cpf').value.trim(),assinou?"Sim":"Não",$('obs').value.trim(),totalFotos?"Sim":"Não",totalFotos,fotosVeiculoLista.join(", "),pasta];
+  var linhas=[colunas],numero=0;
+  SEC.forEach(function(sec){
+    sec[1].forEach(function(descricao){
+      numero++;
+      var resposta=$('it'+numero).querySelector('input[type="radio"]:checked');
+      var quantidade=(fotos[numero]||[]).length;
+      linhas.push(comuns.concat([sec[0],numero,descricao,resposta?resposta.value:"",$('ob'+numero).value.trim(),quantidade?"Sim":"Não",quantidade]));
+    });
+  });
+  return "\ufeff"+linhas.map(function(linha){
+    return linha.map(function(valor){
+      var texto=String(valor);
+      if(/^[\t\r\n]/.test(texto)||/^[\s\ufeff]*[=+\-@]/.test(texto))texto="'"+texto;
+      return '"'+texto.replace(/"/g,'""')+'"';
+    }).join(";");
+  }).join("\r\n")+"\r\n";
+}
+function listaArquivosDrive(pdfBase64,csvBase64,id){
+  var lista=[{nome:nomeArquivoPDF(),mime:"application/pdf",dados:pdfBase64}];
+  SLOTS_VEICULO.forEach(function(slot){
+    if(fotosVeiculo[slot.key])lista.push({nome:"veiculo-"+slot.key+".jpg",mime:"image/jpeg",dados:fotosVeiculo[slot.key].split(",")[1]||""});
+  });
+  for(var i=1;i<=n;i++){
+    (fotos[i]||[]).forEach(function(url,indice){
+      lista.push({nome:"item-"+("00"+i).slice(-2)+"-"+(indice+1)+".jpg",mime:"image/jpeg",dados:url.split(",")[1]||""});
+    });
+  }
+  lista.push({nome:"checklist-"+id+".csv",mime:"text/csv",dados:csvBase64,destino:"csv"});
+  return lista;
+}
+var TAM_PARTE=1000000;
+function postarDrive(corpo,tentativa){
+  tentativa=tentativa||1;
+  var ctrl=typeof AbortController!=="undefined"?new AbortController():null;
+  var timer=setTimeout(function(){if(ctrl)ctrl.abort();},60000);
+  return fetch(DRIVE.scriptUrl,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(corpo),signal:ctrl?ctrl.signal:undefined}).then(function(resp){
     return resp.text().then(function(texto){
+      clearTimeout(timer);
       var dados=null;
-      try{dados=JSON.parse(texto);}catch(e){}
-      if(!dados) throw new Error("O Google Drive não confirmou o envio. Confira se o script está publicado como aplicativo da web, executando como você, com acesso para qualquer pessoa.");
-      if(!resp.ok||!dados.ok) throw new Error(dados.erro||"O Google Drive recusou o arquivo.");
+      try{dados=JSON.parse(texto);}catch(err){}
+      if(!dados)throw new Error("O Google não respondeu como esperado. Confira a URL e a implantação do Apps Script.");
+      if(!resp.ok||!dados.ok){var erro=new Error(dados.erro||"O Google Drive recusou o arquivo.");erro.definitivo=true;throw erro;}
       return dados;
     });
+  }).catch(function(err){
+    clearTimeout(timer);
+    if(err&&err.name==="AbortError")err=new Error("Tempo esgotado no envio. Verifique o sinal do celular.");
+    if((err&&err.definitivo)||tentativa>=3)throw err;
+    return new Promise(function(resolve){setTimeout(resolve,1500*tentativa);}).then(function(){return postarDrive(corpo,tentativa+1);});
+  });
+}
+function enviarArquivoDrive(item,arq,arquivoId,aoAvancar){
+  if(arq.destino==="csv"){
+    return postarDrive({acao:"salvar_csv",nomeCsv:arq.nome,csvBase64:arq.dados}).then(function(d){
+      if(d.destino!=="csv")throw new Error("O Apps Script não confirmou o CSV. Reimplante o script atualizado.");
+      aoAvancar(arq.dados.length);
+      return d;
+    });
+  }
+  var total=Math.max(1,Math.ceil(arq.dados.length/TAM_PARTE)),i=0;
+  function proxima(){
+    if(i>=total)return Promise.resolve();
+    var parte=arq.dados.substr(i*TAM_PARTE,TAM_PARTE);
+    return postarDrive({acao:"arquivo",pasta:item.pasta,nome:arq.nome,mime:arq.mime,id:item.id,arquivoId:arquivoId,indice:i,total:total,dados:parte}).then(function(d){
+      if(d.destino!=="arquivo")throw new Error("O Apps Script não confirmou o arquivo. Reimplante o script atualizado.");
+      i++;aoAvancar(parte.length);return proxima();
+    });
+  }
+  return proxima();
+}
+var FILA_DB="checklist-emflortec-fila-envio",FILA_STORE="pendentes",enviandoFila=false,errosFila={};
+function filaAbrir(){return new Promise(function(resolve,reject){
+  if(!window.indexedDB){reject(new Error("IndexedDB indisponível neste navegador."));return;}
+  var req=indexedDB.open(FILA_DB,1);
+  req.onupgradeneeded=function(){req.result.createObjectStore(FILA_STORE,{keyPath:"id"});};
+  req.onsuccess=function(){resolve(req.result);};
+  req.onerror=function(){reject(req.error);};
+});}
+function filaOp(modo,fn){return filaAbrir().then(function(db){return new Promise(function(resolve,reject){
+  var tx=db.transaction(FILA_STORE,modo),req=fn(tx.objectStore(FILA_STORE));
+  tx.oncomplete=function(){resolve(req&&req.result);db.close();};
+  tx.onerror=function(){reject(tx.error);db.close();};
+  tx.onabort=function(){reject(tx.error||new Error("Sem espaço para guardar o checklist."));db.close();};
+});});}
+function filaListar(){return filaOp("readonly",function(s){return s.getAll();}).then(function(lista){return (lista||[]).sort(function(a,b){return a.criado-b.criado;});});}
+function filaSalvar(item){return filaOp("readwrite",function(s){return s.put(item);});}
+function filaRemover(id){return filaOp("readwrite",function(s){return s.delete(id);});}
+function statusFila(texto,classe){
+  var el=$("filaStatus");
+  if(!texto){el.style.display="none";document.body.classList.remove("com-fila");return;}
+  el.textContent=texto;el.className="noprint "+(classe||"pend");el.style.display="block";document.body.classList.add("com-fila");
+}
+function resumoFila(){
+  return filaListar().then(function(lista){
+    if(!lista.length){statusFila("");return 0;}
+    var qtd=lista.length+(lista.length===1?" checklist pendente":" checklists pendentes");
+    var erro=Object.keys(errosFila).length?errosFila[Object.keys(errosFila)[0]]:"";
+    if(navigator.onLine===false)statusFila(qtd+" — sem internet. Abra o aplicativo quando a conexão voltar.","pend");
+    else if(erro)statusFila(qtd+" — envio pendente: "+erro,"erro");
+    else statusFila(qtd+" — enviando ao Google Drive...","pend");
+    return lista.length;
+  }).catch(function(err){statusFila("Não foi possível acessar a fila: "+(err.message||"erro desconhecido"),"erro");return 0;});
+}
+function enviarItemFila(item,posicao,total){
+  var k=item.indice||0,enviado=0,soma=0;
+  item.arquivos.forEach(function(arq,indice){soma+=arq.dados.length;if(indice<k)enviado+=arq.dados.length;});
+  function proximo(){
+    if(k>=item.arquivos.length)return postarDrive({acao:"concluir",pasta:item.pasta}).then(function(d){
+      if(d.destino!=="concluido")throw new Error("O Apps Script não confirmou o envio. Reimplante o script atualizado.");
+    });
+    return enviarArquivoDrive(item,item.arquivos[k],k,function(tamanho){
+      enviado+=tamanho;
+      statusFila("Enviando "+posicao+" de "+total+" — "+Math.min(99,Math.round(enviado*100/Math.max(1,soma)))+"%","pend");
+    }).then(function(){k++;item.indice=k;return filaSalvar(item);}).then(proximo);
+  }
+  return proximo().then(function(){return filaRemover(item.id);});
+}
+function processarFila(){
+  if(enviandoFila)return Promise.resolve();
+  if(navigator.onLine===false)return resumoFila();
+  enviandoFila=true;
+  var ultimoOk="";
+  return filaListar().then(function(lista){
+    var i=0;
+    function proximo(){
+      if(i>=lista.length)return Promise.resolve();
+      var item=lista[i++];
+      return enviarItemFila(item,i,lista.length).then(function(){
+        delete errosFila[item.id];
+        if(envioAtual&&envioAtual.id===item.id)envioAtual.estado="enviado";
+        ultimoOk="Checklist enviado ao Google Drive, incluindo o CSV.";
+        return proximo();
+      },function(err){
+        console.error("Falha ao enviar checklist.",err);
+        errosFila[item.id]=(err&&err.message)||"erro desconhecido";
+        if(err&&err.definitivo)return proximo();
+      });
+    }
+    return proximo();
+  }).catch(function(err){console.error("Falha na fila de envio.",err);statusFila("Não foi possível acessar a fila de envio.","erro");}).then(function(){
+    enviandoFila=false;
+    return resumoFila().then(function(qtd){if(!qtd&&ultimoOk){statusFila(ultimoOk,"ok");setTimeout(resumoFila,8000);}});
   });
 }
 $("btnDrive").onclick=function(){
+  if(envioAtual){
+    if(envioAtual.estado==="enviado")mostrarMsg("Este checklist já foi enviado ao Google Drive. Altere os dados ou inicie um novo checklist para enviar outro.");
+    else{mostrarMsg("Este checklist já está na fila de envio. O aplicativo tentará enviá-lo quando houver conexão.");processarFila();}
+    return;
+  }
   if(!validar())return;
-  var btn=this,outro=$("btnEnviar");
-  btn.disabled=true;outro.disabled=true;$("msg").style.display="none";
-  var versao=versaoDadosChecklist,nome=nomeBase()+".zip";
-  btn.textContent="⏳ Gerando ZIP...";
+  if(!DRIVE.scriptUrl){mostrarMsg("Configure a URL do Apps Script antes de enviar.");return;}
+  var btn=this;btn.disabled=true;$("btnNovo").disabled=true;$("msg").style.display="none";
+  var versao=versaoDadosChecklist,id="chk-"+Date.now()+"-"+Math.random().toString(36).slice(2,12);
+  var agora=new Date(),hora=("0"+agora.getHours()).slice(-2)+"-"+("0"+agora.getMinutes()).slice(-2);
+  var pasta=nomeBase()+" - "+hora+" - "+id;
+  btn.textContent="Preparando PDF e CSV...";
   gerarPDF().then(function(pdf){
-    if(versao!==versaoDadosChecklist) throw new Error("Os dados foram alterados durante a geração. Envie novamente.");
-    btn.textContent="⏳ Enviando ao Drive...";
-    return montarZip(pdf);
-  }).then(function(zip){
-    return enviarZipParaDrive(zip,nome);
-  }).then(function(dados){
-    mostrarMsg("ZIP enviado para a pasta do Google Drive"+(dados.url?". Abra o arquivo: "+dados.url:"")+".");
+    if(versao!==versaoDadosChecklist)throw new Error("Os dados foram alterados durante a geração. Envie novamente.");
+    var csv=new Blob([gerarCSV(id,pasta)],{type:"text/csv;charset=utf-8"});
+    return Promise.all([blobParaBase64(pdf),blobParaBase64(csv)]);
+  }).then(function(arquivos64){
+    if(versao!==versaoDadosChecklist)throw new Error("Os dados foram alterados durante a geração. Envie novamente.");
+    var item={id:id,pasta:pasta,arquivos:listaArquivosDrive(arquivos64[0],arquivos64[1],id),indice:0,criado:Date.now()};
+    return filaSalvar(item);
+  }).then(function(){
+    if(versao===versaoDadosChecklist)envioAtual={id:id,estado:"pendente"};
+    resumoFila().then(processarFila);
   }).catch(function(err){
-    console.error(err);
-    mostrarMsg("Não foi possível enviar ao Google Drive: "+((err&&err.message)||"erro desconhecido"));
-  }).finally(function(){
-    btn.disabled=false;outro.disabled=false;
-    btn.textContent="☁️ Enviar ZIP para o Google Drive";
-  });
+    console.error("Falha ao preparar checklist para envio.",err);
+    mostrarMsg("Não foi possível guardar o checklist para envio: "+((err&&err.message)||"erro desconhecido")+". Confira o espaço disponível e tente novamente.");
+  }).finally(function(){btn.disabled=false;$("btnNovo").disabled=false;btn.textContent="Enviar checklist ao Google Drive";});
 };
 $('btnNovo').onclick=function(){
-  if(!confirm("Deseja iniciar um NOVO CHECKLIST? Todos os dados, fotos, marcações e assinatura atuais serão apagados. Compartilhe o PDF antes de continuar.")) return;
+  if(!confirm("Deseja iniciar um NOVO CHECKLIST? Os dados, fotos, marcações e assinatura atuais serão apagados. Os checklists já colocados na fila de envio serão mantidos.")) return;
   registrarAlteracaoChecklist();
   limparRespostasSalvas();
   clearTimeout(timerSalvar);
@@ -833,6 +891,11 @@ if(navigator.storage&&navigator.storage.persist){navigator.storage.persist().cat
   desenhaFotosVeiculo();
 })();
 restaurarEstado().catch(function(err){console.warn('Sem estado salvo',err)}).then(function(){restaurado=true;});
+window.addEventListener("online",processarFila);
+window.addEventListener("offline",resumoFila);
+document.addEventListener("visibilitychange",function(){if(!document.hidden)processarFila();});
+setInterval(processarFila,60000);
+resumoFila().then(processarFila);
 
 /* PWA: funcionamento offline e instalação na tela inicial */
 if("serviceWorker" in navigator){

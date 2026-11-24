@@ -1,8 +1,7 @@
-const VERSAO = "checklist-emflortec-v7";
+const VERSAO = "checklist-emflortec-v9";
 const ARQUIVOS = ["./", "./index.html", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png", "./icon-maskable-512.png", "./apple-touch-icon.png"];
 const CDN = [
-  "https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js",
-  "https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"
+  "https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"
 ];
 
 self.addEventListener("install", (e) => {
@@ -10,7 +9,10 @@ self.addEventListener("install", (e) => {
     caches.open(VERSAO).then(async (c) => {
       await c.addAll(ARQUIVOS);
       for (const url of CDN) {
-        try { await c.add(new Request(url, { mode: "no-cors" })); } catch (_) {}
+        try {
+          const resposta = await fetch(new Request(url, { mode: "no-cors" }));
+          if (resposta.ok || resposta.type === "opaque") await c.put(url, resposta);
+        } catch (_) {}
       }
     }).then(() => self.skipWaiting())
   );
@@ -19,7 +21,7 @@ self.addEventListener("install", (e) => {
 self.addEventListener("activate", (e) => {
   e.waitUntil(
     caches.keys()
-      .then((ks) => Promise.all(ks.filter((k) => k !== VERSAO).map((k) => caches.delete(k))))
+      .then((ks) => Promise.all(ks.filter((k) => k.startsWith("checklist-emflortec-") && k !== VERSAO).map((k) => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });
@@ -34,8 +36,8 @@ self.addEventListener("fetch", (e) => {
           caches.open(VERSAO).then((c) => c.put(e.request, copia));
         }
         return resp;
-      });
-      return emCache || rede.catch(() => caches.match("./index.html"));
+      }).catch(() => caches.match("./index.html"));
+      return emCache || rede;
     })
   );
 });
