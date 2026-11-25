@@ -50,7 +50,7 @@ h2{font-size:.95rem;margin:18px 0 8px;color:var(--ac);text-transform:uppercase;l
 .item-fotos{margin-top:8px}
 .btn{display:inline-block;padding:10px 14px;border-radius:8px;border:1px solid var(--ac);background:transparent;color:var(--ac);font:inherit;font-weight:600;cursor:pointer}
 .btn.pri{background:var(--ac);color:#fff;-webkit-print-color-adjust:exact}
-.btn.drive{background:#1a73e8;border-color:#1a73e8;color:#fff}
+.btn.drive{background:#25a85a;border-color:#25a85a;color:#fff}
 .btn.sec{background:var(--na);border-color:var(--na);color:#fff}
 .btn:disabled{opacity:.6;cursor:not-allowed}
 .thumbs{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
@@ -103,7 +103,7 @@ h2{font-size:.95rem;margin:18px 0 8px;color:var(--ac);text-transform:uppercase;l
 </head>
 <body>
 <div class="wrap">
-<header><small>EMFLORTEC ENGENHARIA</small><h1>Checklist Veicular <span class="versao" id="versaoApp">v1.3</span></h1></header>
+<header><small>EMFLORTEC ENGENHARIA</small><h1>Checklist Veicular <span class="versao" id="versaoApp">v1.4</span></h1></header>
 <div class="printtitle"><strong>EMFLORTEC ENGENHARIA</strong><br>CHECKLIST VEICULAR</div>
 
 <div class="card">
@@ -148,10 +148,10 @@ h2{font-size:.95rem;margin:18px 0 8px;color:var(--ac);text-transform:uppercase;l
 <div id="filaStatus" class="noprint" role="status" aria-live="polite"></div>
 
 <div class="actions">
-  <button type="button" class="btn drive" id="btnDrive">Enviar checklist ao Google Drive</button>
+  <button type="button" class="btn drive" id="btnDrive">Compartilhar checklist pelo WhatsApp</button>
   <button type="button" class="btn sec" id="btnNovo">Novo Checklist</button>
 </div>
-<p class="hint noprint" style="margin-top:8px">Um único envio guarda o PDF e as fotos na pasta do checklist e o CSV na pasta de dados. Se estiver sem internet, os arquivos ficam na fila deste aparelho: mantenha ou reabra o aplicativo quando a conexão voltar. Use “Novo Checklist” somente quando quiser limpar os dados e começar outro.</p>
+<p class="hint noprint" style="margin-top:8px">Escolha o WhatsApp e o destinatário no menu do celular. Em alguns aparelhos, toque novamente no botão depois que o PDF estiver pronto. O PDF e as fotos também são enviados ao Drive e o CSV é enviado à pasta de dados. Sem internet, os arquivos ficam na fila deste aparelho: mantenha ou reabra o aplicativo quando a conexão voltar. Use “Novo Checklist” somente quando quiser limpar os dados.</p>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
@@ -572,6 +572,34 @@ function mostrarMsg(texto){
   var msg=$("msg");msg.textContent=texto;msg.style.display="block";
   msg.scrollIntoView({behavior:"smooth",block:"center"});
 }
+function compartilharPDFPronto(automatico){
+  var envio=envioAtual;
+  if(!envio)return;
+  var arquivo=envio.arquivo,versao=versaoDadosChecklist;
+  function baixarPDF(){
+    var url=URL.createObjectURL(envio.blob),link=document.createElement("a");
+    link.href=url;link.download=envio.nomePDF;link.style.display="none";document.body.appendChild(link);link.click();
+    setTimeout(function(){link.remove();URL.revokeObjectURL(url);},15000);
+    mostrarMsg("O PDF foi baixado. No WhatsApp, toque no clipe, escolha Documento e selecione “"+envio.nomePDF+"”.");
+  }
+  function falhaCompartilhamento(err){
+    if(versao!==versaoDadosChecklist){mostrarMsg("Os dados foram alterados. Prepare o checklist novamente antes de compartilhar.");return;}
+    if(err&&err.name==="AbortError"){mostrarMsg("Compartilhamento cancelado. Toque novamente no botão para escolher o WhatsApp.");return;}
+    if(automatico&&err&&err.name==="NotAllowedError"){mostrarMsg("PDF pronto. Toque novamente no botão e escolha o WhatsApp para compartilhar.");return;}
+    console.error("Não foi possível abrir o compartilhamento do PDF.",err);
+    baixarPDF();
+  }
+  var podeCompartilhar=false;
+  try{podeCompartilhar=!!(arquivo&&navigator.share&&(!navigator.canShare||navigator.canShare({files:[arquivo]})));}catch(err){}
+  if(!podeCompartilhar){
+    if(automatico)mostrarMsg("PDF pronto. Toque novamente no botão para baixá-lo e enviá-lo como documento no WhatsApp.");
+    else baixarPDF();
+    return;
+  }
+  try{
+    Promise.resolve(navigator.share({files:[arquivo],title:envio.titulo,text:envio.titulo})).catch(falhaCompartilhamento);
+  }catch(err){falhaCompartilhamento(err);}
+}
 function blobParaBase64(blob){
   return new Promise(function(resolve,reject){
     var leitor=new FileReader();
@@ -606,8 +634,8 @@ function gerarCSV(id,pasta){
     }).join(";");
   }).join("\r\n")+"\r\n";
 }
-function listaArquivosDrive(pdfBase64,csvBase64,id){
-  var lista=[{nome:nomeArquivoPDF(),mime:"application/pdf",dados:pdfBase64}];
+function listaArquivosDrive(pdfBase64,csvBase64,id,nomePDF){
+  var lista=[{nome:nomePDF||nomeArquivoPDF(),mime:"application/pdf",dados:pdfBase64}];
   SLOTS_VEICULO.forEach(function(slot){
     if(fotosVeiculo[slot.key])lista.push({nome:"veiculo-"+slot.key+".jpg",mime:"image/jpeg",dados:fotosVeiculo[slot.key].split(",")[1]||""});
   });
@@ -616,7 +644,7 @@ function listaArquivosDrive(pdfBase64,csvBase64,id){
       lista.push({nome:"item-"+("00"+i).slice(-2)+"-"+(indice+1)+".jpg",mime:"image/jpeg",dados:url.split(",")[1]||""});
     });
   }
-  lista.push({nome:"checklist-"+id+".csv",mime:"text/csv",dados:csvBase64,destino:"csv"});
+  lista.push({nome:lista[0].nome.replace(/\.pdf$/i,".csv"),mime:"text/csv",dados:csvBase64,destino:"csv"});
   return lista;
 }
 var TAM_PARTE=1000000;
@@ -735,8 +763,9 @@ function processarFila(){
 }
 $("btnDrive").onclick=function(){
   if(envioAtual){
-    if(envioAtual.estado==="enviado")mostrarMsg("Este checklist já foi enviado ao Google Drive. Altere os dados ou inicie um novo checklist para enviar outro.");
-    else{mostrarMsg("Este checklist já está na fila de envio. O aplicativo tentará enviá-lo quando houver conexão.");processarFila();}
+    $("msg").style.display="none";
+    compartilharPDFPronto(false);
+    if(envioAtual.estado!=="enviado")processarFila();
     return;
   }
   if(!validar())return;
@@ -744,23 +773,27 @@ $("btnDrive").onclick=function(){
   var btn=this;btn.disabled=true;$("btnNovo").disabled=true;$("msg").style.display="none";
   var versao=versaoDadosChecklist,id="chk-"+Date.now()+"-"+Math.random().toString(36).slice(2,12);
   var agora=new Date(),hora=("0"+agora.getHours()).slice(-2)+"-"+("0"+agora.getMinutes()).slice(-2);
-  var pasta=nomeBase()+" - "+hora+" - "+id;
+  var titulo=nomeBase(),nomePDF=titulo+" - "+("0"+agora.getHours()).slice(-2)+"-"+("0"+agora.getMinutes()).slice(-2)+"-"+("0"+agora.getSeconds()).slice(-2)+".pdf",pasta=titulo+" - "+hora+" - "+id,pdfPronto=null,arquivo=null;
   btn.textContent="Preparando PDF e CSV...";
   gerarPDF().then(function(pdf){
     if(versao!==versaoDadosChecklist)throw new Error("Os dados foram alterados durante a geração. Envie novamente.");
+    pdfPronto=pdf;
+    if(typeof File!=="undefined")arquivo=new File([pdf],nomePDF,{type:"application/pdf"});
     var csv=new Blob([gerarCSV(id,pasta)],{type:"text/csv;charset=utf-8"});
     return Promise.all([blobParaBase64(pdf),blobParaBase64(csv)]);
   }).then(function(arquivos64){
     if(versao!==versaoDadosChecklist)throw new Error("Os dados foram alterados durante a geração. Envie novamente.");
-    var item={id:id,pasta:pasta,arquivos:listaArquivosDrive(arquivos64[0],arquivos64[1],id),indice:0,criado:Date.now()};
+    var item={id:id,pasta:pasta,arquivos:listaArquivosDrive(arquivos64[0],arquivos64[1],id,nomePDF),indice:0,criado:Date.now()};
     return filaSalvar(item);
   }).then(function(){
-    if(versao===versaoDadosChecklist)envioAtual={id:id,estado:"pendente"};
     resumoFila().then(processarFila);
+    if(versao!==versaoDadosChecklist){mostrarMsg("A versão anterior foi colocada na fila do Drive. Os dados foram alterados; prepare o checklist novamente para compartilhá-lo.");return;}
+    envioAtual={id:id,estado:"pendente",blob:pdfPronto,arquivo:arquivo,nomePDF:nomePDF,titulo:titulo};
+    compartilharPDFPronto(true);
   }).catch(function(err){
     console.error("Falha ao preparar checklist para envio.",err);
     mostrarMsg("Não foi possível guardar o checklist para envio: "+((err&&err.message)||"erro desconhecido")+". Confira o espaço disponível e tente novamente.");
-  }).finally(function(){btn.disabled=false;$("btnNovo").disabled=false;btn.textContent="Enviar checklist ao Google Drive";});
+  }).finally(function(){btn.disabled=false;$("btnNovo").disabled=false;btn.textContent="Compartilhar checklist pelo WhatsApp";});
 };
 $('btnNovo').onclick=function(){
   if(!confirm("Deseja iniciar um NOVO CHECKLIST? Os dados, fotos, marcações e assinatura atuais serão apagados. Os checklists já colocados na fila de envio serão mantidos.")) return;
